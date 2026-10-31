@@ -433,6 +433,33 @@ x11_output_event_mask(struct x11_backend *b)
 	return mask;
 }
 
+static int
+x11_output_update_title(struct x11_backend *b, struct x11_output *output)
+{
+	static const char name[] = "Weston Compositor";
+	char *title = NULL;
+
+	if (output->base.name) {
+		if (asprintf(&title, "%s - %s%s", name, output->base.name,
+			     b->no_input ? " (read-only)" : "") < 0)
+			title = NULL;
+	} else if (asprintf(&title, "%s%s", name,
+			    b->no_input ? " (read-only)" : "") < 0) {
+		title = NULL;
+	}
+
+	if (!title) {
+		weston_log("Failed to allocate X11 output title\n");
+		return -1;
+	}
+
+	xcb_change_property(b->conn, XCB_PROP_MODE_REPLACE, output->window,
+			    b->atom.net_wm_name, b->atom.utf8_string, 8,
+			    strlen(title), title);
+	free(title);
+	return 0;
+}
+
 static void
 x11_output_update_event_masks(struct x11_backend *b)
 {
@@ -448,6 +475,7 @@ x11_output_update_event_masks(struct x11_backend *b)
 		mask = x11_output_event_mask(b);
 		xcb_change_window_attributes(b->conn, output->window,
 					     XCB_CW_EVENT_MASK, &mask);
+		x11_output_update_title(b, output);
 	}
 
 	xcb_flush(b->conn);
@@ -1030,9 +1058,7 @@ x11_output_enable(struct weston_output *base)
 
 	b = output->backend;
 
-	static const char name[] = "Weston Compositor";
 	static const char class[] = "weston-1\0Weston Compositor";
-	char *title = NULL;
 	xcb_screen_t *screen;
 	struct wm_normal_hints normal_hints;
 	struct wl_event_loop *loop;
@@ -1082,21 +1108,8 @@ x11_output_enable(struct weston_output *base)
 	}
 
 	/* Set window name.  Don't bother with non-EWMH WMs. */
-	if (output->base.name) {
-		if (asprintf(&title, "%s - %s", name, output->base.name) < 0)
-			title = NULL;
-	} else {
-		title = strdup(name);
-	}
-
-	if (title) {
-		xcb_change_property(b->conn, XCB_PROP_MODE_REPLACE, output->window,
-				    b->atom.net_wm_name, b->atom.utf8_string, 8,
-				    strlen(title), title);
-		free(title);
-	} else {
+	if (x11_output_update_title(b, output) < 0)
 		goto err;
-	}
 
 	xcb_change_property(b->conn, XCB_PROP_MODE_REPLACE, output->window,
 			    b->atom.wm_class, b->atom.string, 8,
