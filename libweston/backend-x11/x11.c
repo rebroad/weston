@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <signal.h>
 #include <sys/time.h>
 #include <sys/shm.h>
 #include <linux/input.h>
@@ -89,6 +90,7 @@ struct x11_backend {
 	xcb_cursor_t		 null_cursor;
 	struct wl_array		 keys;
 	struct wl_event_source	*xcb_source;
+	struct wl_event_source	*input_toggle_source;
 	struct xkb_keymap	*xkb_keymap;
 	unsigned int		 has_xkb;
 	uint8_t			 xkb_event_base;
@@ -394,8 +396,6 @@ x11_input_create(struct x11_backend *b, int no_input)
 {
 	struct xkb_keymap *keymap;
 
-	weston_seat_init(&b->core_seat, b->compositor, "default");
-
 	if (no_input)
 		return 0;
 
@@ -411,10 +411,85 @@ x11_input_create(struct x11_backend *b, int no_input)
 	return 0;
 }
 
+static void x11_input_destroy(struct x11_backend *b);
+
+static uint32_t
+x11_output_event_mask(struct x11_backend *b)
+{
+	uint32_t mask = XCB_EVENT_MASK_EXPOSURE |
+			XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+
+	if (!b->no_input)
+		mask |= XCB_EVENT_MASK_KEY_PRESS |
+			XCB_EVENT_MASK_KEY_RELEASE |
+			XCB_EVENT_MASK_BUTTON_PRESS |
+			XCB_EVENT_MASK_BUTTON_RELEASE |
+			XCB_EVENT_MASK_POINTER_MOTION |
+			XCB_EVENT_MASK_ENTER_WINDOW |
+			XCB_EVENT_MASK_LEAVE_WINDOW |
+			XCB_EVENT_MASK_KEYMAP_STATE |
+			XCB_EVENT_MASK_FOCUS_CHANGE;
+
+	return mask;
+}
+
+static void
+x11_output_update_event_masks(struct x11_backend *b)
+{
+	struct weston_output *base;
+
+	wl_list_for_each(base, &b->compositor->output_list, link) {
+		struct x11_output *output = to_x11_output(base);
+		uint32_t mask;
+
+		if (!output)
+			continue;
+
+		mask = x11_output_event_mask(b);
+		xcb_change_window_attributes(b->conn, output->window,
+					     XCB_CW_EVENT_MASK, &mask);
+	}
+
+	xcb_flush(b->conn);
+}
+
+static int
+x11_backend_toggle_input(int signal_number, void *data)
+{
+	struct x11_backend *b = data;
+	if (!b->no_input) {
+		b->no_input = 1;
+		x11_output_update_event_masks(b);
+		if (b->prev_event) {
+			free(b->prev_event);
+			b->prev_event = NULL;
+		}
+		b->keys.size = 0;
+		b->has_xkb = 0;
+		x11_input_destroy(b);
+		weston_log("X11 input disabled\n");
+		return 0;
+	}
+
+	if (x11_input_create(b, 0) < 0) {
+		weston_log("Failed to enable X11 input\n");
+		x11_input_destroy(b);
+		return 0;
+	}
+
+	b->no_input = 0;
+	x11_output_update_event_masks(b);
+	weston_log("X11 input enabled\n");
+	return 0;
+}
+
 static void
 x11_input_destroy(struct x11_backend *b)
 {
-	weston_seat_release(&b->core_seat);
+	if (b->core_seat.keyboard_device_count > 0)
+		weston_seat_release_keyboard(&b->core_seat);
+	if (b->core_seat.pointer_device_count > 0)
+		weston_seat_release_pointer(&b->core_seat);
 }
 
 static int
@@ -966,23 +1041,9 @@ x11_output_enable(struct weston_output *base)
 	int ret;
 	uint32_t mask = XCB_CW_EVENT_MASK | XCB_CW_CURSOR;
 	xcb_atom_t atom_list[1];
-	uint32_t values[2] = {
-		XCB_EVENT_MASK_EXPOSURE |
-		XCB_EVENT_MASK_STRUCTURE_NOTIFY,
-		0
-	};
+	uint32_t values[2];
 
-	if (!b->no_input)
-		values[0] |=
-			XCB_EVENT_MASK_KEY_PRESS |
-			XCB_EVENT_MASK_KEY_RELEASE |
-			XCB_EVENT_MASK_BUTTON_PRESS |
-			XCB_EVENT_MASK_BUTTON_RELEASE |
-			XCB_EVENT_MASK_POINTER_MOTION |
-			XCB_EVENT_MASK_ENTER_WINDOW |
-			XCB_EVENT_MASK_LEAVE_WINDOW |
-			XCB_EVENT_MASK_KEYMAP_STATE |
-			XCB_EVENT_MASK_FOCUS_CHANGE;
+	values[0] = x11_output_event_mask(b);
 
 	values[1] = b->null_cursor;
 	output->window = xcb_generate_id(b->conn);
@@ -1513,6 +1574,33 @@ x11_backend_next_event(struct x11_backend *b,
 	return *event != NULL;
 }
 
+static bool
+x11_backend_event_is_input(struct x11_backend *b, uint8_t response_type)
+{
+	switch (response_type) {
+	case XCB_KEY_PRESS:
+	case XCB_KEY_RELEASE:
+	case XCB_KEYMAP_NOTIFY:
+	case XCB_BUTTON_PRESS:
+	case XCB_BUTTON_RELEASE:
+	case XCB_MOTION_NOTIFY:
+	case XCB_ENTER_NOTIFY:
+	case XCB_LEAVE_NOTIFY:
+	case XCB_FOCUS_IN:
+	case XCB_FOCUS_OUT:
+		return true;
+	default:
+		break;
+	}
+
+#ifdef HAVE_XCB_XKB
+	if (b->has_xkb && response_type == b->xkb_event_base)
+		return true;
+#endif
+
+	return false;
+}
+
 static int
 x11_backend_handle_event(int fd, uint32_t mask, void *data)
 {
@@ -1537,6 +1625,10 @@ x11_backend_handle_event(int fd, uint32_t mask, void *data)
 	count = 0;
 	while (x11_backend_next_event(b, &event, mask)) {
 		response_type = event->response_type & ~0x80;
+		if (b->no_input && x11_backend_event_is_input(b, response_type)) {
+			free(event);
+			continue;
+		}
 
 		switch (b->prev_event ? b->prev_event->response_type & ~0x80 : 0x80) {
 		case XCB_KEY_RELEASE:
@@ -1853,9 +1945,12 @@ x11_shutdown(struct weston_backend *base)
 {
 	struct x11_backend *backend = to_x11_backend(base);
 
+	if (backend->input_toggle_source)
+		wl_event_source_remove(backend->input_toggle_source);
 
 	wl_event_source_remove(backend->xcb_source);
 	x11_input_destroy(backend);
+	weston_seat_release(&backend->core_seat);
 }
 
 static void
@@ -1961,9 +2056,10 @@ x11_backend_create(struct weston_compositor *compositor,
 	b->base.destroy = x11_destroy;
 	b->base.create_output = x11_output_create;
 
+	weston_seat_init(&b->core_seat, compositor, "default");
 	if (x11_input_create(b, config->no_input) < 0) {
 		weston_log("Failed to create X11 input\n");
-		goto err_renderer;
+		goto err_x11_input;
 	}
 
 	loop = wl_display_get_event_loop(compositor->wl_display);
@@ -1973,6 +2069,13 @@ x11_backend_create(struct weston_compositor *compositor,
 				     WL_EVENT_READABLE,
 				     x11_backend_handle_event, b);
 	wl_event_source_check(b->xcb_source);
+	b->input_toggle_source =
+		wl_event_loop_add_signal(loop, SIGRTMIN + 6,
+					 x11_backend_toggle_input, b);
+	if (!b->input_toggle_source) {
+		weston_log("Failed to create X11 input toggle signal handler\n");
+		goto err_x11_input;
+	}
 
 	if (compositor->capabilities & WESTON_CAP_EXPLICIT_SYNC) {
 		if (linux_explicit_synchronization_setup(compositor) < 0)
@@ -1992,8 +2095,12 @@ x11_backend_create(struct weston_compositor *compositor,
 	return b;
 
 err_x11_input:
+	if (b->input_toggle_source)
+		wl_event_source_remove(b->input_toggle_source);
+	if (b->xcb_source)
+		wl_event_source_remove(b->xcb_source);
 	x11_input_destroy(b);
-err_renderer:
+	weston_seat_release(&b->core_seat);
 	compositor->renderer->destroy(compositor);
 err_xdisplay:
 	XCloseDisplay(b->dpy);
