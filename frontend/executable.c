@@ -42,9 +42,11 @@ main(int argc, char *argv[])
 	char *end;
 	long pid;
 
-	if (argc > 1 && strcmp(argv[1], "--input-toggle") == 0) {
+	if (argc > 1 &&
+	    (strcmp(argv[1], "--input-toggle") == 0 ||
+	     strcmp(argv[1], "--toggle-input") == 0)) {
 		if (argc != 3) {
-			fprintf(stderr, "Usage: weston --input-toggle PID\n");
+			fprintf(stderr, "Usage: weston {--input-toggle|--toggle-input} PID\n");
 			return 2;
 		}
 
@@ -57,7 +59,7 @@ main(int argc, char *argv[])
 		}
 
 		if (kill((pid_t)pid, SIGRTMIN + 6) < 0) {
-			perror("weston --input-toggle");
+			perror("weston input toggle");
 			return 1;
 		}
 

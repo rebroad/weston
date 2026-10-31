@@ -85,13 +85,15 @@ others building compositors or clients.
 
 ### Toggling input in a nested X11 Weston window
 
-For the X11 backend, `weston --input-toggle PID` toggles keyboard and pointer
-input for an already-running Weston process. The compositor window title shows
-`(read-only)` while input is disabled. For a Weston instance started by a user
-systemd unit, pass the unit's main PID directly:
+For the X11 backend, `weston --input-toggle PID` or its alias
+`weston --toggle-input PID` toggles keyboard and pointer input for an
+already-running Weston process. The compositor window title shows
+`(read-only)` while input is disabled. Use the PID of the nested X11-backend
+Weston window, not a headless Weston process. For a Weston instance started by
+a user systemd unit, pass the unit's main PID directly:
 
 ```sh
-weston --input-toggle "$(systemctl --user show --property=MainPID --value UNIT)"
+weston --toggle-input "$(systemctl --user show --property=MainPID --value UNIT)"
 ```
 
 Run the same command again to restore or disable input. This toggles the whole
