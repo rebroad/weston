@@ -725,6 +725,8 @@ usage(int error_code)
 		"  --no-config\t\tDo not read weston.ini\n"
 		"  --wait-for-debugger\tRaise SIGSTOP on start-up\n"
 		"  --debug\t\tEnable debug extension\n"
+		"  --input-toggle PID, --toggle-input PID\n"
+		"\t\t\tToggle input for an existing X11-backend Weston\n"
 		"  -l, --logger-scopes=SCOPE\n\t\t\tSpecify log scopes to "
 			"subscribe to.\n\t\t\tCan specify multiple scopes, "
 			"each followed by comma\n"
