@@ -83,6 +83,27 @@ A small suite of example or demo clients are also provided: though they can be
 useful in themselves, their main purpose is to be an example or test case for
 others building compositors or clients.
 
+### Toggling input in a nested X11 Weston window
+
+For the X11 backend, `weston --input-toggle PID` toggles keyboard and pointer
+input for an already-running Weston process. The compositor window title shows
+`(read-only)` while input is disabled. For a Weston instance started by a user
+systemd unit, pass the unit's main PID directly:
+
+```sh
+weston --input-toggle "$(systemctl --user show --property=MainPID --value UNIT)"
+```
+
+For the ElseMesh Hogwarts preview service, the command is:
+
+```sh
+weston --input-toggle "$(systemctl --user show --property=MainPID --value elsemesh-hogwarts-weston-visible.service)"
+```
+
+Run the same command again to restore or disable input. This toggles the whole
+Weston seat; it does not add an item to the outer window manager's titlebar
+menu.
+
 
 Using libweston
 ===============
