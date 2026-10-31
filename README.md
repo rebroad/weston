@@ -94,12 +94,6 @@ systemd unit, pass the unit's main PID directly:
 weston --input-toggle "$(systemctl --user show --property=MainPID --value UNIT)"
 ```
 
-For the ElseMesh Hogwarts preview service, the command is:
-
-```sh
-weston --input-toggle "$(systemctl --user show --property=MainPID --value elsemesh-hogwarts-weston-visible.service)"
-```
-
 Run the same command again to restore or disable input. This toggles the whole
 Weston seat; it does not add an item to the outer window manager's titlebar
 menu.
