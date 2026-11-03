@@ -4605,6 +4605,18 @@ weston_seat_set_keyboard_focus(struct weston_seat *seat,
 	}
 }
 
+static void disable_pointer_constraint(struct weston_pointer_constraint *constraint);
+
+static void
+pointer_constraint_escape_binding(struct weston_keyboard *keyboard,
+				  const struct timespec *time,
+				  uint32_t key, void *data)
+{
+	struct weston_pointer_constraint *constraint = data;
+
+	disable_pointer_constraint(constraint);
+}
+
 static void
 enable_pointer_constraint(struct weston_pointer_constraint *constraint,
 			  struct weston_view *view)
@@ -4613,6 +4625,10 @@ enable_pointer_constraint(struct weston_pointer_constraint *constraint,
 	constraint->view = view;
 	pointer_constraint_notify_activated(constraint);
 	weston_pointer_start_grab(constraint->pointer, &constraint->grab);
+	if (pointer_constraint_get_type(constraint) == POINTER_CONSTRAINT_TYPE_LOCK)
+		constraint->escape_binding = weston_compositor_add_key_binding(
+			constraint->surface->compositor, KEY_ESC, 0,
+			pointer_constraint_escape_binding, constraint);
 	wl_signal_add(&constraint->view->unmap_signal,
 		      &constraint->view_unmap_listener);
 }
@@ -4627,6 +4643,10 @@ static void
 weston_pointer_constraint_disable(struct weston_pointer_constraint *constraint)
 {
 	constraint->view = NULL;
+	if (constraint->escape_binding) {
+		weston_binding_destroy(constraint->escape_binding);
+		constraint->escape_binding = NULL;
+	}
 	pointer_constraint_notify_deactivated(constraint);
 	weston_pointer_end_grab(constraint->grab.pointer);
 	wl_list_remove(&constraint->view_unmap_listener.link);
