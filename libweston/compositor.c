@@ -9560,6 +9560,7 @@ weston_compositor_create(struct wl_display *display,
 	wl_signal_init(&ec->output_resized_signal);
 	wl_signal_init(&ec->heads_changed_signal);
 	wl_signal_init(&ec->output_heads_changed_signal);
+	wl_signal_init(&ec->release_pointer_signal);
 	wl_signal_init(&ec->session_signal);
 	wl_signal_init(&ec->output_capture.ask_auth);
 	ec->session_active = true;
