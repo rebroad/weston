@@ -1924,6 +1924,7 @@ struct weston_surface_activation_data {
 
 struct weston_pointer_constraint {
 	struct wl_list link;
+	struct weston_binding *escape_binding;
 
 	struct weston_surface *surface;
 	struct weston_view *view;
