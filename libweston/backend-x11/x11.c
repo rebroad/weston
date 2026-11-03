@@ -91,6 +91,7 @@ struct x11_backend {
 	struct wl_array		 keys;
 	struct wl_event_source	*xcb_source;
 	struct wl_event_source	*input_toggle_source;
+	struct wl_listener	 release_pointer_listener;
 	struct xkb_keymap	*xkb_keymap;
 	unsigned int		 has_xkb;
 	uint8_t			 xkb_event_base;
@@ -509,6 +510,16 @@ x11_backend_toggle_input(int signal_number, void *data)
 	x11_output_update_event_masks(b);
 	weston_log("X11 input enabled\n");
 	return 0;
+}
+
+static void
+x11_backend_release_pointer(struct wl_listener *listener, void *data)
+{
+	struct x11_backend *b =
+		container_of(listener, struct x11_backend, release_pointer_listener);
+
+	xcb_ungrab_pointer(b->conn, XCB_CURRENT_TIME);
+	xcb_flush(b->conn);
 }
 
 static void
@@ -1974,6 +1985,7 @@ x11_destroy(struct weston_backend *base)
 	struct weston_compositor *ec = backend->compositor;
 	struct weston_head *head, *next;
 
+	wl_list_remove(&backend->release_pointer_listener.link);
 	wl_list_remove(&backend->base.link);
 
 	wl_list_for_each_safe(head, next, &ec->head_list, compositor_link) {
@@ -2105,6 +2117,10 @@ x11_backend_create(struct weston_compositor *compositor,
 		weston_log("Failed to register output API.\n");
 		goto err_x11_input;
 	}
+
+	b->release_pointer_listener.notify = x11_backend_release_pointer;
+	wl_signal_add(&compositor->release_pointer_signal,
+		      &b->release_pointer_listener);
 
 	return b;
 

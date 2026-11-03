@@ -854,6 +854,8 @@ on_release_mouse_signal(int signal_number, void *data)
 		count++;
 	}
 
+	wl_signal_emit(&wet->compositor->release_pointer_signal,
+		       wet->compositor);
 	weston_log("Released %d pointer grab(s) on request\n", count);
 	return 1;
 }
