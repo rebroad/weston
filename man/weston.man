@@ -114,6 +114,11 @@ and
 .
 .SS Weston core options:
 .TP
+.B weston --release-mouse PID
+Cancel active pointer grabs in the running Weston process with the given
+process ID. This can be used to recover the pointer when it is trapped by a
+client grab.
+.TP
 \fB\-\^B\fR\fIbackend1,backend2\fR, \fB\-\-backend\fR=\fIbackend1,backend2\fR
 Load the comma-separated list of backends instead of the default backend, see
 .IR BACKENDS .

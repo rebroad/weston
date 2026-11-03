@@ -2116,7 +2116,7 @@ weston_pointer_end_grab(struct weston_pointer *pointer)
 	pointer->grab->interface->focus(pointer->grab);
 }
 
-static void
+WL_EXPORT void
 weston_pointer_cancel_grab(struct weston_pointer *pointer)
 {
 	pointer->grab->interface->cancel(pointer->grab);
