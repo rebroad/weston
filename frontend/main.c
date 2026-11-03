@@ -727,6 +727,7 @@ usage(int error_code)
 		"  --debug\t\tEnable debug extension\n"
 		"  --input-toggle PID, --toggle-input PID\n"
 		"\t\t\tToggle input for an existing X11-backend Weston\n"
+		"  --release-mouse PID\tCancel pointer grabs in an existing Weston\n"
 		"  -l, --logger-scopes=SCOPE\n\t\t\tSpecify log scopes to "
 			"subscribe to.\n\t\t\tCan specify multiple scopes, "
 			"each followed by comma\n"
@@ -833,6 +834,27 @@ static int on_term_signal(int signal_number, void *data)
 	weston_log("caught signal %d\n", signal_number);
 	wl_display_terminate(display);
 
+	return 1;
+}
+
+static int
+on_release_mouse_signal(int signal_number, void *data)
+{
+	struct wet_compositor *wet = data;
+	struct weston_seat *seat;
+	struct weston_pointer *pointer;
+	int count = 0;
+
+	wl_list_for_each(seat, &wet->compositor->seat_list, link) {
+		pointer = weston_seat_get_pointer(seat);
+		if (!pointer || pointer->grab == &pointer->default_grab)
+			continue;
+
+		weston_pointer_cancel_grab(pointer);
+		count++;
+	}
+
+	weston_log("Released %d pointer grab(s) on request\n", count);
 	return 1;
 }
 
@@ -4417,7 +4439,7 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 	int ret = EXIT_FAILURE;
 	char *cmdline;
 	struct wl_display *display;
-	struct wl_event_source *signals[3];
+	struct wl_event_source *signals[4];
 	struct wl_event_loop *loop;
 	int i, fd;
 	char *backends = NULL;
@@ -4551,6 +4573,8 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 	wl_list_init(&wet.child_process_list);
 	signals[2] = wl_event_loop_add_signal(loop, SIGCHLD, sigchld_handler,
 					      &wet);
+	signals[3] = wl_event_loop_add_signal(loop, SIGRTMIN + 7,
+					      on_release_mouse_signal, &wet);
 
 	/* When debugging weston, if use wl_event_loop_add_signal() to catch
 	 * SIGINT, the debugger can't catch it, and attempting to stop
@@ -4566,7 +4590,7 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 	sigemptyset(&action.sa_mask);
 	action.sa_flags = 0;
 	sigaction(SIGINT, &action, NULL);
-	if (!signals[0] || !signals[1] || !signals[2])
+	if (!signals[0] || !signals[1] || !signals[2] || !signals[3])
 		goto out_signals;
 
 	/* Xwayland uses SIGUSR1 for communicating with weston. Since some

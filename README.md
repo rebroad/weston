@@ -100,6 +100,10 @@ Run the same command again to restore or disable input. This toggles the whole
 Weston seat; it does not add an item to the outer window manager's titlebar
 menu.
 
+To cancel an active pointer grab in any Weston backend, run
+\`weston --release-mouse PID\`, using the PID of the Weston process. This is a
+command-line recovery option when the pointer is trapped by a client grab.
+
 
 Using libweston
 ===============

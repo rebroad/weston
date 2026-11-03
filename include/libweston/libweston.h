@@ -1090,6 +1090,8 @@ weston_pointer_start_grab(struct weston_pointer *pointer,
 void
 weston_pointer_end_grab(struct weston_pointer *pointer);
 void
+weston_pointer_cancel_grab(struct weston_pointer *pointer);
+void
 weston_pointer_move(struct weston_pointer *pointer,
 		    struct weston_pointer_motion_event *event);
 void

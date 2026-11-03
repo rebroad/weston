@@ -42,6 +42,28 @@ main(int argc, char *argv[])
 	char *end;
 	long pid;
 
+	if (argc > 1 && strcmp(argv[1], "--release-mouse") == 0) {
+		if (argc != 3) {
+			fprintf(stderr, "Usage: weston --release-mouse PID\n");
+			return 2;
+		}
+
+		errno = 0;
+		pid = strtol(argv[2], &end, 10);
+		if (errno != 0 || end == argv[2] || *end != '\0' ||
+		    pid <= 0 || pid > INT_MAX) {
+			fprintf(stderr, "Invalid PID: %s\n", argv[2]);
+			return 2;
+		}
+
+		if (kill((pid_t)pid, SIGRTMIN + 7) < 0) {
+			perror("weston release mouse");
+			return 1;
+		}
+
+		return 0;
+	}
+
 	if (argc > 1 &&
 	    (strcmp(argv[1], "--input-toggle") == 0 ||
 	     strcmp(argv[1], "--toggle-input") == 0)) {
