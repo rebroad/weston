@@ -1512,7 +1512,6 @@ struct weston_compositor {
 	struct wl_signal output_heads_changed_signal; /* arg: weston_output */
 
 	struct wl_signal session_signal;
-	struct wl_signal release_pointer_signal;
 	bool session_active;
 
 	struct weston_layer fade_layer;
@@ -1629,6 +1628,9 @@ struct weston_compositor {
 		struct wl_global *weston_capture_v1;
 		struct wl_signal ask_auth;
 	} output_capture;
+
+	/* Appended to preserve the offsets of fields used by older modules. */
+	struct wl_signal release_pointer_signal;
 };
 
 struct weston_solid_buffer_values {
