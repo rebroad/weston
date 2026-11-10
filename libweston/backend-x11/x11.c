@@ -1428,11 +1428,12 @@ x11_backend_deliver_button_event(struct x11_backend *b,
 	uint32_t button;
 	struct x11_output *output;
 	struct weston_pointer_axis_event weston_event;
-	bool is_button_pressed = event->response_type == XCB_BUTTON_PRESS;
+	uint8_t response_type = event->response_type & ~0x80;
+	bool is_button_pressed = response_type == XCB_BUTTON_PRESS;
 	struct timespec time = { 0 };
 
-	assert(event->response_type == XCB_BUTTON_PRESS ||
-	       event->response_type == XCB_BUTTON_RELEASE);
+	assert(response_type == XCB_BUTTON_PRESS ||
+	       response_type == XCB_BUTTON_RELEASE);
 
 	output = x11_backend_find_output(b, button_event->event);
 	if (!output)
